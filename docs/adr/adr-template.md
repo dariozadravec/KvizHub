@@ -1,12 +1,12 @@
 ---
-# Status: predlagano | sprejeto | zavrnjeno | opuščeno | nadomeščeno z [ADR-NNNN](NNNN-naslov.md)
-status: "{predlagano | sprejeto | zavrnjeno | opuščeno | nadomeščeno z ADR-NNNN}"
+# Status: predlagano | sprejeto | zavrnjeno | opuščeno | nadomeščeno z [ADR-NNN](NNN-naslov.md)
+status: "{predlagano | sprejeto | zavrnjeno | opuščeno | nadomeščeno z ADR-NNN}"
 # Datum zadnje spremembe odločitve (YYYY-MM-DD)
 date: {YYYY-MM-DD}
 # Kdo je odločitev sprejel
 decision-makers: {seznam oseb}
 # Neobvezno: ADR, ki ga ta odločitev nadomešča
-supersedes: "{ADR-NNNN | /}"
+supersedes: "{ADR-NNN | /}"
 ---
 
 <!--
@@ -15,9 +15,9 @@ supersedes: "{ADR-NNNN | /}"
   dopolnjeni z metapodatki iz polne predloge in prevedeni v slovenščino.
 
   Pravila uporabe:
-  - Datoteke so oštevilčene zaporedno: 0001-kratek-naslov.md, 0002-...
+  - Datoteke so oštevilčene zaporedno: 001-kratek-naslov.md, 002-...
   - Sprejetega ADR-ja ne spreminjamo. Če se odločitev spremeni, ustvarimo nov ADR,
-    v njem izpolnimo "supersedes", v starem pa status nastavimo na "nadomeščeno z ADR-NNNN".
+    v njem izpolnimo "supersedes", v starem pa status nastavimo na "nadomeščeno z ADR-NNN".
   - ADR opisuje, ZAKAJ je bila odločitev sprejeta, ne le katera tehnologija je izbrana.
 -->
 
