@@ -59,7 +59,7 @@ Odločitve so zapisane po predlogi [MADR](https://adr.github.io/madr/) v [`docs/
 
 Razvoj poteka po [GitHub Flow](https://docs.github.com/en/get-started/using-github/github-flow):
 
-1. Iz veje `main` ustvarimo novo vejo z opisnim imenom (npr. `feature/rezervacija-mize`, `docs/adr-0007`).
+1. Iz veje `main` ustvarimo novo vejo z opisnim imenom (npr. `feature/rezervacija-mize`, `docs/adr-007`).
 2. Na veji delamo manjše commite in jo potisnemo na GitHub.
 3. Odpremo pull request v `main`.
 4. Po pregledu spremembe združimo v `main` in vejo izbrišemo.

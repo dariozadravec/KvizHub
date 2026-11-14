@@ -23,8 +23,8 @@ Dokument pretvori funkcionalnosti iz `02-funkcionalnosti-in-obseg.md` v uporabni
 | US-15 | Čakalna lista | 10 | vodja ekipe | |
 | US-16 | Odjava z rokom | 11 | vodja ekipe | |
 | US-17 | Pregled povratnih informacij | 12 | kvizmaster | |
-| US-19 | Urejanje in združevanje lokalov | 13 | administrator | |
-| US-20 | Upravljanje uporabnikov | 14 | administrator | |
+| US-18 | Urejanje in združevanje lokalov | 13 | administrator | |
+| US-19 | Upravljanje uporabnikov | 14 | administrator | |
 
 ## MVP
 
