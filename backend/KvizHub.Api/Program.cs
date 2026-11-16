@@ -25,18 +25,6 @@ app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
 app.MapControllers();
-app.MapGet("/dbtest", async (KvizHubDbContext db) =>
-{
-    try
-    {
-        await db.Database.OpenConnectionAsync();
-        return "OK";
-    }
-    catch (Exception ex)
-    {
-        return ex.ToString();
-    }
-});
 app.MapHealthChecks("/health");
 app.MapFallbackToFile("index.html");
 
