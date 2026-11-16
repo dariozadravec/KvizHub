@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="backend/KvizHub.Api/KvizHub.Api.csproj" Id="212fa83a-36f8-40e1-bcd3-686090006def" />
+  <Project Path="frontend/KvizHub.Client/KvizHub.Client.csproj" Id="cf834470-3a02-44ff-9341-a01e4972e933" />
+  <Project Path="shared/KvizHub.Shared/KvizHub.Shared.csproj" Id="73f2ed9f-895e-44ed-9b01-c44478051351" />
+  <Project Path="tests/KvizHub.Tests/KvizHub.Tests.csproj" Id="ffab9395-59c9-4060-a119-adb86881afaa" />
+</Solution>
