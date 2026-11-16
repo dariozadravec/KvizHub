@@ -50,8 +50,10 @@ Odločitve so zapisane po predlogi [MADR](https://adr.github.io/madr/) v [`docs/
 ## Struktura repozitorija
 
 ```
-├── frontend/   # Blazor WebAssembly odjemalec (v pripravi)
-├── backend/    # ASP.NET Core Web API (v pripravi)
+├── frontend/   # Blazor WebAssembly odjemalec
+├── backend/    # ASP.NET Core Web API
+├── shared/     # skupne datoteke za backend in frontend
+├── tests/      # testi (xUnit)
 └── docs/       # dokumentacija, wireframi in ADR
 ```
 
