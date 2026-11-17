@@ -30,6 +30,7 @@ builder.Services.AddIdentity<AppUser, IdentityRole<int>>(options =>
     .AddPasswordValidator<LetterPasswordValidator>();
 
 var app = builder.Build();
+await AdminSeeder.SeedAsync(app.Services, app.Configuration, app.Logger);
 
 if (app.Environment.IsDevelopment())
 {
