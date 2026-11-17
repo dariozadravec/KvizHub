@@ -35,6 +35,7 @@ await AdminSeeder.SeedAsync(app.Services, app.Configuration, app.Logger);
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "KvizHub API"));
     app.UseWebAssemblyDebugging();
 }
 
