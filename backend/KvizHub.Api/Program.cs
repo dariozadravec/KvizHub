@@ -9,7 +9,8 @@ builder.Services.AddOpenApi();
 var connectionString = builder.Configuration.GetConnectionString("KvizHub")
     ?? throw new InvalidOperationException("Connection string 'KvizHub' is not configured.");
 
-builder.Services.AddDbContext<KvizHubDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddDbContext<KvizHubDbContext>(options =>
+    options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
 builder.Services.AddHealthChecks().AddDbContextCheck<KvizHubDbContext>();
 
 var app = builder.Build();
