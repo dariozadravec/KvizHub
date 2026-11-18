@@ -77,6 +77,8 @@ Vsi ukazi se izvedejo v korenu repozitorija.
 
 2. Ustvarite datoteko `.env` iz vzorca in v njej nastavite geslo za bazo (`POSTGRES_PASSWORD`):
 
+   Geslo nastavite pred prvim zagonom baze (korak 3), ker ga PostgreSQL prebere samo ob ustvarjanju baze.
+
    ```bash
    cp .env.example .env
    ```
@@ -101,6 +103,7 @@ Vsi ukazi se izvedejo v korenu repozitorija.
 5. Obnovite orodja (`dotnet-ef`) in ustvarite shemo baze:
 
    ```bash
+   dotnet restore
    dotnet tool restore
    dotnet ef database update --project backend/KvizHub.Api
    ```
