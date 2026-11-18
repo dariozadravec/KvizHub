@@ -29,6 +29,25 @@ builder.Services.AddIdentity<AppUser, IdentityRole<int>>(options =>
     .AddErrorDescriber<SlovenianIdentityErrorDescriber>()
     .AddPasswordValidator<LetterPasswordValidator>();
 
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+
+    // The API returns status codes instead of redirecting to a login page
+    options.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return Task.CompletedTask;
+    };
+});
+
 var app = builder.Build();
 await AdminSeeder.SeedAsync(app.Services, app.Configuration, app.Logger);
 
