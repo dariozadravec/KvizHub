@@ -1,0 +1,117 @@
+﻿@page "/register"
+@using System.Net
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Registracija | KvizHub</PageTitle>
+
+<h1 class="mb-4">Registracija</h1>
+
+<EditForm EditContext="editContext" OnValidSubmit="SubmitAsync">
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label for="email" class="form-label">E-pošta</label>
+        <InputText id="email" type="email" class="form-control" placeholder="ime@primer.si" @bind-Value="model.Email" />
+        <ValidationMessage For="() => model.Email" />
+    </div>
+
+    <div class="mb-3">
+        <label for="displayName" class="form-label">Prikazno ime</label>
+        <InputText id="displayName" class="form-control" placeholder="npr. Marko" @bind-Value="model.DisplayName" />
+        <ValidationMessage For="() => model.DisplayName" />
+    </div>
+
+    <div class="mb-3">
+        <label for="password" class="form-label">Geslo</label>
+        <InputText id="password" type="password" class="form-control" @bind-Value="model.Password" />
+        <div class="form-text">Vsaj 8 znakov, vsaj ena črka in ena številka.</div>
+        <ValidationMessage For="() => model.Password" />
+    </div>
+
+    <div class="mb-4">
+        <label class="form-label d-block">Vloga</label>
+        <InputRadioGroup @bind-Value="model.Role">
+            <div class="form-check">
+                <InputRadio id="roleQuizmaster" class="form-check-input" Value="UserRole.Quizmaster" />
+                <label for="roleQuizmaster" class="form-check-label">Kvizmaster</label>
+            </div>
+            <div class="form-check">
+                <InputRadio id="roleTeamLeader" class="form-check-input" Value="UserRole.TeamLeader" />
+                <label for="roleTeamLeader" class="form-check-label">Vodja ekipe</label>
+            </div>
+        </InputRadioGroup>
+        <ValidationMessage For="() => model.Role" />
+    </div>
+
+    @if (generalError is not null)
+    {
+        <div class="alert alert-danger">@generalError</div>
+    }
+
+    <button type="submit" class="btn btn-dark w-100" disabled="@isSubmitting">Ustvari račun</button>
+</EditForm>
+
+<p class="text-center text-muted mt-3">Že imaš račun? <a href="login">Prijava</a></p>
+
+@code {
+    private readonly RegisterRequest model = new();
+    private EditContext editContext = default!;
+    private ValidationMessageStore serverErrors = default!;
+    private string? generalError;
+    private bool isSubmitting;
+
+    protected override void OnInitialized()
+    {
+        editContext = new EditContext(model);
+        serverErrors = new ValidationMessageStore(editContext);
+        // Clear the server error of a field as soon as the user edits it
+        editContext.OnFieldChanged += (_, e) => serverErrors.Clear(e.FieldIdentifier);
+    }
+
+    private async Task SubmitAsync()
+    {
+        isSubmitting = true;
+        generalError = null;
+        serverErrors.Clear();
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/auth/register", model);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var user = await response.Content.ReadFromJsonAsync<AuthUserDto>();
+                Navigation.NavigateTo(user!.Role == UserRole.Quizmaster ? "my-events" : "events");
+                return;
+            }
+
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                // Show the API validation errors under the matching form fields
+                var problem = await response.Content.ReadFromJsonAsync<ValidationErrors>();
+                if (problem?.Errors is not null)
+                {
+                    foreach (var (field, messages) in problem.Errors)
+                        serverErrors.Add(editContext.Field(field), messages);
+                }
+                editContext.NotifyValidationStateChanged();
+            }
+            else
+            {
+                generalError = "Registracija ni uspela. Poskusite znova.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            generalError = "Strežnik ni dosegljiv. Poskusite znova.";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    // Shape of the validation problem returned by the API
+    private sealed record ValidationErrors(Dictionary<string, string[]> Errors);
+}
