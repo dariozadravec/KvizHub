@@ -30,7 +30,7 @@ builder.Services.AddIdentity<AppUser, IdentityRole<int>>(options =>
     .AddEntityFrameworkStores<KvizHubDbContext>()
     .AddErrorDescriber<SlovenianIdentityErrorDescriber>()
     .AddPasswordValidator<LetterPasswordValidator>()
-    .AddClaimsPrincipalFactory<AppUserClaimsPrincipalFactory>(); ;
+    .AddClaimsPrincipalFactory<AppUserClaimsPrincipalFactory>();
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
