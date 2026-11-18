@@ -1,6 +1,8 @@
 using KvizHub.Api.Data;
 using KvizHub.Api.Data.Entities;
 using KvizHub.Api.Identity;
+using KvizHub.Shared.Enums;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,7 +29,8 @@ builder.Services.AddIdentity<AppUser, IdentityRole<int>>(options =>
     })
     .AddEntityFrameworkStores<KvizHubDbContext>()
     .AddErrorDescriber<SlovenianIdentityErrorDescriber>()
-    .AddPasswordValidator<LetterPasswordValidator>();
+    .AddPasswordValidator<LetterPasswordValidator>()
+    .AddClaimsPrincipalFactory<AppUserClaimsPrincipalFactory>(); ;
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -48,12 +51,19 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
+builder.Services.AddAuthorizationBuilder()
+    // Every endpoint requires a signed-in user unless it is marked with [AllowAnonymous]
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
+    .AddPolicy(Policies.Quizmaster, policy => policy.RequireRole(nameof(UserRole.Quizmaster)))
+    .AddPolicy(Policies.TeamLeader, policy => policy.RequireRole(nameof(UserRole.TeamLeader)))
+    .AddPolicy(Policies.Admin, policy => policy.RequireRole(nameof(UserRole.Admin)));
+
 var app = builder.Build();
 await AdminSeeder.SeedAsync(app.Services, app.Configuration, app.Logger);
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
     app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "KvizHub API"));
     app.UseWebAssemblyDebugging();
 }
@@ -65,7 +75,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHealthChecks("/health");
-app.MapFallbackToFile("index.html");
+app.MapHealthChecks("/health").AllowAnonymous();
+app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
