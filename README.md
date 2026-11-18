@@ -57,6 +57,83 @@ Odločitve so zapisane po predlogi [MADR](https://adr.github.io/madr/) v [`docs/
 └── docs/       # dokumentacija, wireframi in ADR
 ```
 
+## Lokalni zagon
+
+### Zahteve
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+### Koraki
+
+Vsi ukazi se izvedejo v korenu repozitorija.
+
+1. Klonirajte repozitorij:
+
+   ```bash
+   git clone https://github.com/dariozadravec/KvizHub.git
+   cd KvizHub
+   ```
+
+2. Ustvarite datoteko `.env` iz vzorca in v njej nastavite geslo za bazo (`POSTGRES_PASSWORD`):
+
+   Geslo nastavite pred prvim zagonom baze (korak 3), ker ga PostgreSQL prebere samo ob ustvarjanju baze.
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Na Windows v ukaznem pozivu: `copy .env.example .env`.
+
+3. Zaženite PostgreSQL:
+
+   ```bash
+   docker compose up -d
+   ```
+
+4. Nastavite povezovalni niz do baze in podatke administratorskega računa v uporabniških skrivnostih. Geslo za bazo mora biti enako kot v `.env`, geslo administratorja pa mora imeti vsaj 8 znakov, vsaj eno črko in eno številko:
+
+   ```bash
+   dotnet user-secrets set "ConnectionStrings:KvizHub" "Host=localhost;Port=5432;Database=kvizhub;Username=kvizhub;Password=<geslo iz .env>" --project backend/KvizHub.Api
+   dotnet user-secrets set "Admin:Email" "admin@kvizhub.si" --project backend/KvizHub.Api
+   dotnet user-secrets set "Admin:Password" "<geslo administratorja>" --project backend/KvizHub.Api
+   dotnet user-secrets set "Admin:DisplayName" "Administrator" --project backend/KvizHub.Api
+   ```
+
+5. Obnovite orodja (`dotnet-ef`) in ustvarite shemo baze:
+
+   ```bash
+   dotnet restore
+   dotnet tool restore
+   dotnet ef database update --project backend/KvizHub.Api
+   ```
+
+6. Zaupajte razvojnemu certifikatu HTTPS (samo ob prvem zagonu na računalniku):
+
+   ```bash
+   dotnet dev-certs https --trust
+   ```
+
+7. Zaženite API, ki streže tudi odjemalca:
+
+   ```bash
+   dotnet run --project backend/KvizHub.Api --launch-profile https
+   ```
+
+   Ob prvem zagonu se ustvari administratorski račun iz koraka 4.
+   
+### Naslovi
+
+| Naslov | Namen |
+|---|---|
+| https://localhost:7268 | aplikacija |
+| https://localhost:7268/swagger | Swagger UI za ročno testiranje API-ja (samo v razvojnem okolju) |
+| https://localhost:7268/health | preverjanje povezave z bazo |
+
+Aplikacijo je treba zagnati prek HTTPS (profil `https`), ker se piškotek seje pošilja samo prek HTTPS.
+
+### Testi
+
 ## Razvojni proces
 
 Razvoj poteka po [GitHub Flow](https://docs.github.com/en/get-started/using-github/github-flow):
