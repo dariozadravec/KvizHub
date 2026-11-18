@@ -43,7 +43,43 @@ namespace KvizHub.Api.Controllers
             }
 
             await signInManager.SignInAsync(user, isPersistent: false);
-            return Ok(new AuthUserDto(user.Email!, user.DisplayName, user.Role));
+            return Ok(ToDto(user));
         }
+
+        [HttpPost("login")]
+        [AllowAnonymous]
+        public async Task<ActionResult<AuthUserDto>> Login(LoginRequest request)
+        {
+            // Same response for an unknown email and a wrong password, so it does not reveal which one is wrong
+            var user = await userManager.FindByEmailAsync(request.Email);
+            if (user is null)
+                return InvalidCredentials();
+
+            var result = await signInManager.PasswordSignInAsync(user, request.Password, isPersistent: false, lockoutOnFailure: false);
+            if (!result.Succeeded)
+                return InvalidCredentials();
+
+            return Ok(ToDto(user));
+        }
+
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            await signInManager.SignOutAsync();
+            return NoContent();
+        }
+
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<ActionResult<AuthUserDto>> Me()
+        {
+            var user = await userManager.GetUserAsync(User);
+            return user is null ? Unauthorized() : Ok(ToDto(user));
+        }
+
+        private ObjectResult InvalidCredentials() =>
+            Problem(detail: "Napačen e-naslov ali geslo.", statusCode: StatusCodes.Status401Unauthorized);
+
+        private static AuthUserDto ToDto(AppUser user) => new(user.Email!, user.DisplayName, user.Role);
     }
 }
