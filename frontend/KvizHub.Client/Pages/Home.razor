@@ -1,7 +1,19 @@
 ﻿@page "/"
+@inject NavigationManager Navigation
 
-<PageTitle>Home</PageTitle>
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
 
-<h1>Hello, world!</h1>
+    // Sends the user to the login page or to the start page of their role
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
 
-Welcome to your new app.
+        var target = user.Identity?.IsAuthenticated != true ? "login"
+            : user.IsInRole(nameof(UserRole.Quizmaster)) ? "my-events"
+            : "events";
+
+        Navigation.NavigateTo(target, replace: true);
+    }
+}

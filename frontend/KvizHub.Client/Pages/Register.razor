@@ -2,6 +2,7 @@
 @using System.Net
 @inject HttpClient Http
 @inject NavigationManager Navigation
+@inject ApiAuthenticationStateProvider AuthProvider
 
 <PageTitle>Registracija | KvizHub</PageTitle>
 
@@ -82,6 +83,7 @@
             if (response.IsSuccessStatusCode)
             {
                 var user = await response.Content.ReadFromJsonAsync<AuthUserDto>();
+                AuthProvider.NotifyUserChanged();
                 Navigation.NavigateTo(user!.Role == UserRole.Quizmaster ? "my-events" : "events");
                 return;
             }

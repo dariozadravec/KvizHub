@@ -1,0 +1,80 @@
+﻿@page "/login"
+@using System.Net
+@inject HttpClient Http
+@inject ApiAuthenticationStateProvider AuthProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Prijava | KvizHub</PageTitle>
+
+<h1 class="mb-4">Prijava</h1>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-secondary">@errorMessage</div>
+}
+
+<EditForm Model="model" OnValidSubmit="SubmitAsync">
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label for="email" class="form-label">E-pošta</label>
+        <InputText id="email" type="email" class="form-control" placeholder="ime@primer.si" @bind-Value="model.Email" />
+        <ValidationMessage For="() => model.Email" />
+    </div>
+
+    <div class="mb-4">
+        <label for="password" class="form-label">Geslo</label>
+        <InputText id="password" type="password" class="form-control" @bind-Value="model.Password" />
+        <ValidationMessage For="() => model.Password" />
+    </div>
+
+    <button type="submit" class="btn btn-dark w-100" disabled="@isSubmitting">Prijava</button>
+</EditForm>
+
+<p class="text-center text-muted mt-3">Nimaš računa? <a href="register">Registracija</a></p>
+
+@code {
+    private readonly LoginRequest model = new();
+    private string? errorMessage;
+    private bool isSubmitting;
+
+    private async Task SubmitAsync()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/auth/login", model);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var user = await response.Content.ReadFromJsonAsync<AuthUserDto>();
+                AuthProvider.NotifyUserChanged();
+                Navigation.NavigateTo(user!.Role == UserRole.Quizmaster ? "my-events" : "events");
+                return;
+            }
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();
+                errorMessage = problem?.Detail ?? "Napačen e-naslov ali geslo.";
+            }
+            else
+            {
+                errorMessage = "Prijava ni uspela. Poskusite znova.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Strežnik ni dosegljiv. Poskusite znova.";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    // Shape of the problem details returned by the API
+    private sealed record ProblemResponse(string? Detail);
+}
