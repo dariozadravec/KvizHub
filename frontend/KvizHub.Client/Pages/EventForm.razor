@@ -1,0 +1,341 @@
+﻿@page "/events/new"
+@page "/events/{Id:int}/edit"
+@using System.Net
+@using System.Text.RegularExpressions
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>@PageTitleText | KvizHub</PageTitle>
+
+<h1 class="mb-4">@PageTitleText</h1>
+
+@if (loadError is not null)
+{
+    <div class="alert alert-secondary">@loadError</div>
+}
+else if (editContext is null)
+{
+    <p>Nalaganje …</p>
+}
+else
+{
+    <EditForm EditContext="editContext" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+            <label for="title" class="form-label">Naslov</label>
+            <InputText id="title" class="form-control" placeholder="npr. Torkov pub kviz" @bind-Value="model.Title" />
+            <ValidationMessage For="() => model.Title" />
+        </div>
+
+        <div class="mb-3">
+            <label for="startsAt" class="form-label">Datum in ura začetka</label>
+            <InputDate id="startsAt" Type="InputDateType.DateTimeLocal" class="form-control" min="@MinStartsAt" @bind-Value="model.StartsAt" />
+            <ValidationMessage For="() => model.StartsAt" />
+        </div>
+
+        <div class="mb-3">
+            <label for="venue" class="form-label">Lokal</label>
+            <InputSelect id="venue" class="form-select" @bind-Value="model.VenueId" @bind-Value:after="OnVenueChanged">
+                <option value="">Izberite lokal</option>
+                @foreach (var venue in venues)
+                {
+                    <option value="@venue.Id">@venue.Name, @venue.Street, @venue.City</option>
+                }
+            </InputSelect>
+            <ValidationMessage For="() => model.VenueId" />
+            <button type="button" class="btn btn-link btn-sm px-0" @onclick="() => showNewVenue = !showNewVenue">
+                @(showNewVenue ? "Skrij nov lokal" : "Dodaj nov lokal")
+            </button>
+        </div>
+
+        @if (showNewVenue)
+        {
+            <div class="border rounded p-3 mb-3 bg-light">
+                <h2 class="h6">Nov lokal</h2>
+                <input class="form-control mb-2" placeholder="Ime lokala" @bind="newVenue.Name" />
+                <input class="form-control mb-2" placeholder="Ulica in hišna številka" @bind="newVenue.Street" />
+                <div class="d-flex gap-2 mb-2">
+                    <input class="form-control" placeholder="Poštna št." @bind="newVenue.PostalCode" />
+                    <input class="form-control" placeholder="Kraj" @bind="newVenue.City" />
+                </div>
+                <label class="form-label small">Privzeta kapaciteta</label>
+                <input type="number" class="form-control mb-2" @bind="newVenue.DefaultCapacity" />
+
+                @foreach (var error in venueErrors)
+                {
+                    <div class="text-danger small">@error</div>
+                }
+
+                @if (sameAddressWarning is not null)
+                {
+                    <div class="alert alert-warning mt-2 mb-2">
+                        <p class="mb-2">@sameAddressWarning</p>
+                        <button type="button" class="btn btn-sm btn-dark" @onclick="ConfirmSameAddressAsync">Vseeno dodaj</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => sameAddressWarning = null">Prekliči</button>
+                    </div>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-sm btn-dark mt-2" @onclick="AddVenueAsync">Shrani lokal</button>
+                }
+            </div>
+        }
+
+        <div class="mb-3">
+            <label for="capacity" class="form-label">Kapaciteta (število mest)</label>
+            <InputNumber id="capacity" class="form-control" @bind-Value="model.Capacity" />
+            <ValidationMessage For="() => model.Capacity" />
+        </div>
+
+        <div class="form-check form-switch mb-4">
+            <InputCheckbox id="joker" class="form-check-input" @bind-Value="model.JokerEnabled" />
+            <label for="joker" class="form-check-label">Dogodek uporablja joker</label>
+        </div>
+
+        <h2 class="h5">Sklopi</h2>
+        <ValidationMessage For="() => model.Sections" />
+
+        @for (var i = 0; i < model.Sections.Count; i++)
+        {
+            var index = i;
+            var section = model.Sections[index];
+
+            <div class="border rounded p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong>@(index + 1). sklop</strong>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-secondary" disabled="@(index == 0)" @onclick="() => MoveSection(index, -1)">↑</button>
+                        <button type="button" class="btn btn-outline-secondary" disabled="@(index == model.Sections.Count - 1)" @onclick="() => MoveSection(index, 1)">↓</button>
+                        <button type="button" class="btn btn-outline-danger" @onclick="() => model.Sections.RemoveAt(index)">Odstrani</button>
+                    </div>
+                </div>
+
+                <InputText class="form-control" placeholder="Ime sklopa" @bind-Value="section.Name" />
+                <ValidationMessage For="() => section.Name" />
+
+                <InputText class="form-control mt-2" placeholder="Tema" @bind-Value="section.Topic" />
+                <ValidationMessage For="() => section.Topic" />
+
+                <label class="form-label small mt-2">Največ točk</label>
+                <InputNumber class="form-control" @bind-Value="section.MaxPoints" />
+                <ValidationMessage For="() => section.MaxPoints" />
+            </div>
+        }
+
+        <button type="button" class="btn btn-outline-dark w-100 mb-4" @onclick="() => model.Sections.Add(new SectionInput())">Dodaj sklop</button>
+
+        @if (generalError is not null)
+        {
+            <div class="alert alert-danger">@generalError</div>
+        }
+
+        <button type="submit" class="btn btn-dark w-100" disabled="@isSaving">Shrani osnutek</button>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    // Server validation keys for sections look like "Sections[0].Name"
+    private static readonly Regex SectionErrorKey = new(@"^Sections\[(\d+)\]\.(\w+)$");
+
+    private readonly SaveEventRequest model = new();
+    private EditContext? editContext;
+    private ValidationMessageStore? serverErrors;
+    private List<VenueDto> venues = [];
+    private string? loadError;
+    private string? generalError;
+    private bool isSaving;
+
+    private bool showNewVenue;
+    private CreateVenueRequest newVenue = new();
+    private List<string> venueErrors = [];
+    private string? sameAddressWarning;
+
+    private string PageTitleText => Id is null ? "Nov dogodek" : "Urejanje dogodka";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            venues = await Http.GetFromJsonAsync<List<VenueDto>>("api/venues") ?? [];
+
+            if (Id is null)
+            {
+                model.Sections.Add(new SectionInput());
+            }
+            else
+            {
+                var response = await Http.GetAsync($"api/events/{Id}");
+                if (!response.IsSuccessStatusCode)
+                {
+                    loadError = "Dogodka ni mogoče najti.";
+                    return;
+                }
+
+                var ev = (await response.Content.ReadFromJsonAsync<EventDto>())!;
+                if (ev.Status != EventStatus.Draft)
+                {
+                    loadError = "Objavljenega dogodka ni več mogoče urejati.";
+                    return;
+                }
+
+                model.Title = ev.Title;
+                model.StartsAt = new DateTimeOffset(ev.StartsAt.ToLocalTime());
+                model.VenueId = ev.Venue.Id;
+                model.Capacity = ev.Capacity;
+                model.JokerEnabled = ev.JokerEnabled;
+                model.Sections = ev.Sections
+                    .Select(s => new SectionInput { Name = s.Name, Topic = s.Topic, MaxPoints = s.MaxPoints })
+                    .ToList();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Strežnik ni dosegljiv. Poskusite znova.";
+            return;
+        }
+
+        editContext = new EditContext(model);
+        serverErrors = new ValidationMessageStore(editContext);
+        // Clear the server error of a field as soon as the user edits it
+        editContext.OnFieldChanged += (_, e) => serverErrors.Clear(e.FieldIdentifier);
+    }
+
+    // Prefills the capacity with the default capacity of the selected venue
+    private void OnVenueChanged()
+    {
+        var venue = venues.FirstOrDefault(v => v.Id == model.VenueId);
+        if (venue is not null)
+            model.Capacity = venue.DefaultCapacity;
+    }
+
+    private void MoveSection(int index, int offset)
+    {
+        var section = model.Sections[index];
+        model.Sections.RemoveAt(index);
+        model.Sections.Insert(index + offset, section);
+    }
+
+    private async Task SaveAsync()
+    {
+        isSaving = true;
+        generalError = null;
+        serverErrors!.Clear();
+
+        try
+        {
+            var response = Id is null
+                ? await Http.PostAsJsonAsync("api/events", model)
+                : await Http.PutAsJsonAsync($"api/events/{Id}", model);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("my-events");
+                return;
+            }
+
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ValidationErrors>();
+                if (problem?.Errors is not null)
+                    ShowServerErrors(problem.Errors);
+            }
+            else if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();
+                generalError = problem?.Detail;
+            }
+            else
+            {
+                generalError = "Shranjevanje ni uspelo. Poskusite znova.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            generalError = "Strežnik ni dosegljiv. Poskusite znova.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    // Shows API validation errors under the matching fields, including fields of each section
+    private void ShowServerErrors(Dictionary<string, string[]> errors)
+    {
+        foreach (var (key, messages) in errors)
+        {
+            var match = SectionErrorKey.Match(key);
+            var sectionIndex = match.Success ? int.Parse(match.Groups[1].Value) : -1;
+
+            var field = sectionIndex >= 0 && sectionIndex < model.Sections.Count
+                ? new FieldIdentifier(model.Sections[sectionIndex], match.Groups[2].Value)
+                : editContext!.Field(key);
+
+            serverErrors!.Add(field, messages);
+        }
+        editContext!.NotifyValidationStateChanged();
+    }
+
+    private async Task AddVenueAsync()
+    {
+        venueErrors = [];
+        sameAddressWarning = null;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/venues", newVenue);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var venue = (await response.Content.ReadFromJsonAsync<VenueDto>())!;
+                venues = venues.Append(venue).OrderBy(v => v.Name).ToList();
+                model.VenueId = venue.Id;
+                model.Capacity = venue.DefaultCapacity;
+                serverErrors!.Clear(editContext!.Field(nameof(model.VenueId)));
+                editContext.NotifyValidationStateChanged();
+
+                newVenue = new CreateVenueRequest();
+                showNewVenue = false;
+            }
+            else if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ValidationErrors>();
+                venueErrors = problem?.Errors?.SelectMany(e => e.Value).ToList() ?? [];
+            }
+            else if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();
+                if (problem?.Title == "SameAddress")
+                    sameAddressWarning = problem.Detail;
+                else
+                    venueErrors = [problem?.Detail ?? "Lokala ni mogoče dodati."];
+            }
+            else
+            {
+                venueErrors = ["Lokala ni mogoče dodati."];
+            }
+        }
+        catch (HttpRequestException)
+        {
+            venueErrors = ["Strežnik ni dosegljiv. Poskusite znova."];
+        }
+    }
+
+    // Sends the same venue again after the user confirms the warning about the same address
+    private async Task ConfirmSameAddressAsync()
+    {
+        newVenue.ConfirmSameAddress = true;
+        await AddVenueAsync();
+        newVenue.ConfirmSameAddress = false;
+    }
+
+    private static string MinStartsAt => DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+
+    // Shapes of the error responses returned by the API
+    private sealed record ValidationErrors(Dictionary<string, string[]> Errors);
+    private sealed record ProblemResponse(string? Title, string? Detail);
+}
