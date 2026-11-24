@@ -1,0 +1,117 @@
+﻿@page "/my-events"
+@using System.Net
+@inject HttpClient Http
+
+<PageTitle>Moji dogodki | KvizHub</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">Moji dogodki</h1>
+    <a href="events/new" class="btn btn-dark btn-sm">Nov dogodek</a>
+</div>
+
+@if (loadError is not null)
+{
+    <div class="alert alert-secondary">@loadError</div>
+}
+else if (events is null)
+{
+    <p>Nalaganje …</p>
+}
+else if (events.Count == 0)
+{
+    <p class="text-muted">Nimate še nobenega dogodka.</p>
+}
+else
+{
+    @foreach (var ev in events)
+    {
+        var next = EventStatusFlow.Next(ev.Status);
+
+        <div class="border rounded p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="fw-bold">@ev.Title</div>
+                    <div class="small text-muted">@ev.StartsAt.ToLocalTime().ToString("d. M. yyyy 'ob' HH:mm")</div>
+                    <div class="small text-muted">@ev.VenueName, @ev.VenueCity</div>
+                </div>
+                <span class="badge text-bg-secondary">@EventStatusText.Label(ev.Status)</span>
+            </div>
+
+            <div class="d-flex gap-2 mt-3">
+                @if (ev.Status == EventStatus.Draft)
+                {
+                    <a href="events/@ev.Id/edit" class="btn btn-outline-dark btn-sm">Uredi</a>
+                }
+                @if (next is not null)
+                {
+                    <button class="btn btn-dark btn-sm" disabled="@(busyEventId == ev.Id)"
+                            @onclick="() => ChangeStatusAsync(ev.Id, next.Value)">
+                        @EventStatusText.Action(next.Value)
+                    </button>
+                }
+            </div>
+
+            @if (errors.TryGetValue(ev.Id, out var error))
+            {
+                <div class="text-danger small mt-2">@error</div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private List<MyEventDto>? events;
+    private string? loadError;
+    private int? busyEventId;
+    private readonly Dictionary<int, string> errors = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            events = await Http.GetFromJsonAsync<List<MyEventDto>>("api/events/mine");
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Seznama dogodkov ni mogoče naložiti.";
+        }
+    }
+
+    private async Task ChangeStatusAsync(int eventId, EventStatus target)
+    {
+        busyEventId = eventId;
+        errors.Remove(eventId);
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"api/events/{eventId}/status", new ChangeStatusRequest(target));
+
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadAsync();
+            }
+            else if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();
+                errors[eventId] = problem?.Detail ?? "Spremembe stanja ni mogoče izvesti.";
+            }
+            else
+            {
+                errors[eventId] = "Spremembe stanja ni mogoče izvesti.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errors[eventId] = "Strežnik ni dosegljiv. Poskusite znova.";
+        }
+        finally
+        {
+            busyEventId = null;
+        }
+    }
+
+    // Shape of the problem details returned by the API
+    private sealed record ProblemResponse(string? Detail);
+}
