@@ -1,6 +1,7 @@
 ﻿using KvizHub.Api.Data;
 using KvizHub.Api.Data.Entities;
 using KvizHub.Api.Identity;
+using KvizHub.Api.Services;
 using KvizHub.Shared.Enums;
 using KvizHub.Shared.Events;
 using KvizHub.Shared.Venues;
@@ -12,7 +13,7 @@ namespace KvizHub.Api.Controllers
 {
     [ApiController]
     [Route("api/events")]
-    public class EventsController(KvizHubDbContext db) : ControllerBase
+    public class EventsController(KvizHubDbContext db, EventStatusService statusService) : ControllerBase
     {
         [HttpGet("{id:int}")]
         public async Task<ActionResult<EventDto>> Get(int id)
@@ -80,6 +81,23 @@ namespace KvizHub.Api.Controllers
             db.Sections.RemoveRange(oldSections);
             db.Sections.AddRange(CreateSections(ev, request));
             await db.SaveChangesAsync();
+
+            return await Get(id);
+        }
+
+        [HttpPost("{id:int}/status")]
+        [Authorize(Policy = Policies.Quizmaster)]
+        public async Task<ActionResult<EventDto>> ChangeStatus(int id, ChangeStatusRequest request)
+        {
+            var ev = await db.QuizEvents.FindAsync(id);
+            if (ev is null)
+                return NotFound();
+            if (ev.OrganizerId != User.GetUserId())
+                return Forbid();
+
+            var error = await statusService.ChangeStatusAsync(ev, request.Status);
+            if (error is not null)
+                return Problem(detail: error, statusCode: StatusCodes.Status409Conflict);
 
             return await Get(id);
         }

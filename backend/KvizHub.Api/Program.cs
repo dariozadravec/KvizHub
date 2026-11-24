@@ -1,6 +1,7 @@
 using KvizHub.Api.Data;
 using KvizHub.Api.Data.Entities;
 using KvizHub.Api.Identity;
+using KvizHub.Api.Services;
 using KvizHub.Shared.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -57,6 +58,8 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy(Policies.Quizmaster, policy => policy.RequireRole(nameof(UserRole.Quizmaster)))
     .AddPolicy(Policies.TeamLeader, policy => policy.RequireRole(nameof(UserRole.TeamLeader)))
     .AddPolicy(Policies.Admin, policy => policy.RequireRole(nameof(UserRole.Admin)));
+
+builder.Services.AddScoped<EventStatusService>();
 
 var app = builder.Build();
 await AdminSeeder.SeedAsync(app.Services, app.Configuration, app.Logger);
