@@ -15,6 +15,19 @@ namespace KvizHub.Api.Controllers
     [Route("api/events")]
     public class EventsController(KvizHubDbContext db, EventStatusService statusService) : ControllerBase
     {
+        [HttpGet("mine")]
+        [Authorize(Policy = Policies.Quizmaster)]
+        public async Task<List<MyEventDto>> GetMine()
+        {
+            var userId = User.GetUserId();
+
+            return await db.QuizEvents
+                .Where(q => q.OrganizerId == userId)
+                .OrderByDescending(q => q.StartsAt)
+                .Select(q => new MyEventDto(q.Id, q.Title, q.StartsAt, q.Status, q.Venue.Name, q.Venue.City))
+                .ToListAsync();
+        }
+
         [HttpGet("{id:int}")]
         public async Task<ActionResult<EventDto>> Get(int id)
         {
