@@ -15,6 +15,67 @@ namespace KvizHub.Api.Controllers
     [Route("api/events")]
     public class EventsController(KvizHubDbContext db, EventStatusService statusService) : ControllerBase
     {
+        private static readonly TimeZoneInfo LocalZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Ljubljana");
+
+        [HttpGet("search")]
+        [Authorize(Policy = Policies.TeamLeader)]
+        public async Task<List<EventSearchResultDto>> Search(string? city, DateOnly? from, DateOnly? to, int? organizerId)
+        {
+            var query = db.QuizEvents.Where(q => q.Status == EventStatus.Published);
+
+            // City starts with the given text, case insensitive (e.g. "murska" finds "Murska Sobota")
+            if (!string.IsNullOrWhiteSpace(city))
+                query = query.Where(q => EF.Functions.ILike(q.Venue.City, $"{city.Trim()}%"));
+
+            if (from is not null)
+            {
+                var fromUtc = StartOfDayUtc(from.Value);
+                query = query.Where(q => q.StartsAt >= fromUtc);
+            }
+
+            // The "to" day is included, so the limit is the start of the next day
+            if (to is not null)
+            {
+                var toUtc = StartOfDayUtc(to.Value.AddDays(1));
+                query = query.Where(q => q.StartsAt < toUtc);
+            }
+
+            if (organizerId is not null)
+                query = query.Where(q => q.OrganizerId == organizerId);
+
+            var results = await query
+                .Select(q => new EventSearchResultDto(
+                    q.Id,
+                    q.Title,
+                    q.StartsAt,
+                    q.Venue.Name,
+                    q.Venue.City,
+                    q.Organizer.DisplayName,
+                    q.Capacity - db.Reservations
+                        .Where(r => r.EventId == q.Id && r.Status == ReservationStatus.Confirmed)
+                        .Sum(r => (int)r.TeamSize),
+                    q.JokerEnabled))
+                .ToListAsync();
+
+            // Events with free seats first, full events at the end, each group by date
+            return results
+                .OrderBy(r => r.FreeSeats <= 0)
+                .ThenBy(r => r.StartsAt)
+                .ToList();
+        }
+
+        [HttpGet("organizers")]
+        [Authorize(Policy = Policies.TeamLeader)]
+        public async Task<List<OrganizerDto>> GetOrganizers() =>
+            await db.Users
+                .Where(u => u.Role == UserRole.Quizmaster)
+                .OrderBy(u => u.DisplayName)
+                .Select(u => new OrganizerDto(u.Id, u.DisplayName))
+                .ToListAsync();
+
+        private static DateTime StartOfDayUtc(DateOnly date) =>
+            TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(TimeOnly.MinValue), LocalZone);
+
         [HttpGet("mine")]
         [Authorize(Policy = Policies.Quizmaster)]
         public async Task<List<MyEventDto>> GetMine()
