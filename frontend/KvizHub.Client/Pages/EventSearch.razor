@@ -1,0 +1,184 @@
+﻿@page "/events"
+@inject HttpClient Http
+
+<PageTitle>Poišči kviz | KvizHub</PageTitle>
+
+<h1 class="mb-4">Poišči kviz</h1>
+
+<EditForm Model="filter" OnSubmit="SearchAsync">
+    <div class="mb-2">
+        <label for="city" class="form-label small text-muted mb-1">Kraj</label>
+        <InputText id="city" class="form-control" @bind-Value="filter.City" />
+    </div>
+
+    <div class="row g-2 mb-2">
+        <div class="col">
+            <label for="from" class="form-label small text-muted mb-1">Od</label>
+            <InputDate id="from" class="form-control" @bind-Value="filter.From" />
+        </div>
+        <div class="col">
+            <label for="to" class="form-label small text-muted mb-1">Do</label>
+            <InputDate id="to" class="form-control" @bind-Value="filter.To" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label for="organizer" class="form-label small text-muted mb-1">Organizator</label>
+        <InputSelect id="organizer" class="form-select" @bind-Value="filter.OrganizerId">
+            <option value="">Vsi organizatorji</option>
+            @foreach (var organizer in organizers)
+            {
+                <option value="@organizer.Id">@organizer.DisplayName</option>
+            }
+        </InputSelect>
+    </div>
+
+    <div class="row g-2 mb-4">
+        <div class="col">
+            <button type="submit" class="btn btn-dark w-100">Išči</button>
+        </div>
+        <div class="col">
+            <button type="button" class="btn btn-outline-dark w-100" @onclick="ResetAsync">Ponastavi</button>
+        </div>
+    </div>
+</EditForm>
+
+@if (error is not null)
+{
+    <div class="alert alert-secondary">@error</div>
+}
+else if (results is null)
+{
+    <p>Nalaganje …</p>
+}
+else if (results.Count == 0)
+{
+    <div class="text-center text-muted py-4">
+        <p>Ni kvizov, ki ustrezajo izbranim filtrom.</p>
+        <button class="btn btn-outline-dark" @onclick="ResetAsync">Ponastavi filtre</button>
+    </div>
+}
+else
+{
+    var available = results.Where(r => r.FreeSeats > 0).ToList();
+    var full = results.Where(r => r.FreeSeats <= 0).ToList();
+
+    <p class="text-muted small">@FoundText(results.Count)</p>
+
+    @foreach (var ev in available)
+    {
+        @EventCard(ev, isFull: false)
+    }
+
+    @if (full.Count > 0)
+    {
+        <hr />
+        <p class="text-center text-muted small">Polni dogodki</p>
+
+        @foreach (var ev in full)
+        {
+            @EventCard(ev, isFull: true)
+        }
+    }
+}
+
+@code {
+    private static readonly string[] DayNames = ["ned", "pon", "tor", "sre", "čet", "pet", "sob"];
+
+    private SearchFilter filter = new();
+    private List<OrganizerDto> organizers = [];
+    private List<EventSearchResultDto>? results;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            organizers = await Http.GetFromJsonAsync<List<OrganizerDto>>("api/events/organizers") ?? [];
+        }
+        catch (HttpRequestException)
+        {
+            error = "Iskalnika ni mogoče naložiti.";
+            return;
+        }
+
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        var parameters = new List<string>();
+        if (!string.IsNullOrWhiteSpace(filter.City))
+            parameters.Add($"city={Uri.EscapeDataString(filter.City.Trim())}");
+        if (filter.From is not null)
+            parameters.Add($"from={filter.From:yyyy-MM-dd}");
+        if (filter.To is not null)
+            parameters.Add($"to={filter.To:yyyy-MM-dd}");
+        if (filter.OrganizerId is not null)
+            parameters.Add($"organizerId={filter.OrganizerId}");
+
+        var url = "api/events/search" + (parameters.Count > 0 ? "?" + string.Join("&", parameters) : "");
+
+        try
+        {
+            error = null;
+            results = await Http.GetFromJsonAsync<List<EventSearchResultDto>>(url);
+        }
+        catch (HttpRequestException)
+        {
+            error = "Iskanje ni uspelo. Poskusite znova.";
+        }
+    }
+
+    private async Task ResetAsync()
+    {
+        filter = new SearchFilter();
+        await SearchAsync();
+    }
+
+    // Slovenian dual and plural forms, e.g. "Najdena 2 kviza", "Najdeni 4 kvizi"
+    private static string FoundText(int count) => (count % 100) switch
+    {
+        1 => $"Najden {count} kviz",
+        2 => $"Najdena {count} kviza",
+        3 or 4 => $"Najdeni {count} kvizi",
+        _ => $"Najdenih {count} kvizov"
+    };
+
+    // Start in local time with a Slovenian day name, e.g. "tor, 8. 12. 2026 ob 20:00"
+    private static string FormatStart(DateTime startsAt)
+    {
+        var local = startsAt.ToLocalTime();
+        return $"{DayNames[(int)local.DayOfWeek]}, {local:d. M. yyyy} ob {local:HH:mm}";
+    }
+
+    private RenderFragment EventCard(EventSearchResultDto ev, bool isFull) =>
+        @<a href="events/@ev.Id" class="d-block border rounded p-3 mb-3 text-decoration-none text-dark @(isFull ? "bg-light" : "")">
+            <div class="fw-bold fs-5 @(isFull ? "text-muted" : "")">@ev.Title</div>
+            <div>@ev.VenueName, @ev.VenueCity</div>
+            <div>@FormatStart(ev.StartsAt)</div>
+            <div class="small text-muted">Organizator: @ev.OrganizerName</div>
+            <div class="d-flex gap-2 mt-2">
+                @if (isFull)
+                {
+                    <span class="badge text-bg-dark">Zasedeno</span>
+                }
+                else
+                {
+                    <span class="badge rounded-pill border bg-light text-dark">Prosta mesta: @ev.FreeSeats</span>
+                }
+                @if (ev.JokerEnabled)
+                {
+                    <span class="badge rounded-pill border bg-light text-dark">Joker</span>
+                }
+            </div>
+        </a>;
+
+    private sealed class SearchFilter
+    {
+        public string? City { get; set; }
+        public DateOnly? From { get; set; }
+        public DateOnly? To { get; set; }
+        public int? OrganizerId { get; set; }
+    }
+}
