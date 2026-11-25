@@ -55,6 +55,40 @@ else
         </tbody>
     </table>
 
+    @if (eventReservations is not null)
+    {
+        <h2 class="h4 mt-4">Rezervacije</h2>
+
+        @if (eventReservations.Count == 0)
+        {
+            <p class="text-muted">Ni še rezervacij.</p>
+        }
+        else
+        {
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Ekipa</th>
+                        <th>Vodja</th>
+                        <th class="text-end">Mest</th>
+                        <th>Stanje</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var reservation in eventReservations)
+                    {
+                        <tr class="@(reservation.Status == ReservationStatus.Cancelled ? "text-muted" : "")">
+                            <td>@reservation.TeamName</td>
+                            <td>@reservation.LeaderName</td>
+                            <td class="text-end">@reservation.TeamSize</td>
+                            <td>@ReservationStatusText.Label(reservation.Status)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+
     @if (isTeamLeader && ev.Status == EventStatus.Published)
     {
         <div class="border border-dark rounded p-3 mt-4">
@@ -124,6 +158,8 @@ else
     private EventDto? ev;
     private string? loadError;
     private bool isTeamLeader;
+    private bool isQuizmaster;
+    private List<EventReservationDto>? eventReservations;
 
     private List<TeamDto> teams = [];
     private bool useExistingTeam;
@@ -145,6 +181,7 @@ else
     {
         var user = (await AuthState).User;
         isTeamLeader = user.IsInRole(nameof(UserRole.TeamLeader));
+        isQuizmaster = user.IsInRole(nameof(UserRole.Quizmaster));
         await LoadAsync();
     }
 
@@ -159,6 +196,14 @@ else
                 teams = await Http.GetFromJsonAsync<List<TeamDto>>("api/teams/mine") ?? [];
                 useExistingTeam = teams.Count > 0;
                 selectedTeamId ??= teams.FirstOrDefault()?.Id;
+            }
+            // Only the organizer gets the list; for other quizmasters the API returns 403 and nothing is shown
+            if (isQuizmaster)
+            {
+                var response = await Http.GetAsync($"api/events/{Id}/reservations");
+                eventReservations = response.IsSuccessStatusCode
+                    ? await response.Content.ReadFromJsonAsync<List<EventReservationDto>>()
+                    : null;
             }
 
             teamSize = Math.Clamp(teamSize, 1, MaxTeamSize);

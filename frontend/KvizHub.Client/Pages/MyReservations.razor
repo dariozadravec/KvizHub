@@ -1,0 +1,56 @@
+﻿@page "/my-reservations"
+@inject HttpClient Http
+
+<PageTitle>Moje rezervacije | KvizHub</PageTitle>
+
+<h1 class="mb-4">Moje rezervacije</h1>
+
+@if (loadError is not null)
+{
+    <div class="alert alert-secondary">@loadError</div>
+}
+else if (reservations is null)
+{
+    <p>Nalaganje …</p>
+}
+else if (reservations.Count == 0)
+{
+    <p class="text-muted">Nimate še nobene rezervacije. <a href="events">Poiščite kviz</a>.</p>
+}
+else
+{
+    @foreach (var reservation in reservations)
+    {
+        var isCancelled = reservation.Status == ReservationStatus.Cancelled;
+
+        <div class="border rounded p-3 mb-3 @(isCancelled ? "bg-light" : "")">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <a href="events/@reservation.EventId" class="fw-bold text-dark">@reservation.EventTitle</a>
+                    <div class="small text-muted">@reservation.EventStartsAt.ToLocalTime().ToString("d. M. yyyy 'ob' HH:mm")</div>
+                    <div class="small">Ekipa: @reservation.TeamName, število članov: @reservation.TeamSize</div>
+                </div>
+                <span class="badge @(isCancelled ? "border text-muted" : "text-bg-secondary")">
+                    @ReservationStatusText.Label(reservation.Status)
+                </span>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<ReservationDto>? reservations;
+    private string? loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            reservations = await Http.GetFromJsonAsync<List<ReservationDto>>("api/reservations/mine");
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Seznama rezervacij ni mogoče naložiti.";
+        }
+    }
+}
