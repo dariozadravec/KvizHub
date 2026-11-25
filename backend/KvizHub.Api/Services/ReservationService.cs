@@ -29,6 +29,16 @@ namespace KvizHub.Api.Services
             if (ev.Status != EventStatus.Published)
                 return ReservationOutcome.Fail(StatusCodes.Status409Conflict, "Rezervacije za ta dogodek niso odprte.");
 
+            // A person plays in only one team per evening, so a user can lead at most one active reservation per event
+            var reservedTeamName = await db.Reservations
+                .Where(r => r.EventId == eventId && r.Leader.UserId == userId && r.Status != ReservationStatus.Cancelled)
+                .Select(r => r.Team.Name)
+                .FirstOrDefaultAsync();
+
+            if (reservedTeamName is not null)
+                return ReservationOutcome.Fail(StatusCodes.Status409Conflict,
+                    $"Na ta dogodek ste že prijavljeni z ekipo „{reservedTeamName}“.");
+
             TeamMember leader;
             Reservation? existing = null;
 

@@ -9,6 +9,7 @@ public record EventDto(
     DateTime StartsAt,
     EventStatus Status,
     int Capacity,
+    int FreeSeats,
     bool JokerEnabled,
     VenueDto Venue,
     string OrganizerName,

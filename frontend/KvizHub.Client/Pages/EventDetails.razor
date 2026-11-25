@@ -1,0 +1,227 @@
+﻿@page "/events/{Id:int}"
+@using System.Net
+@inject HttpClient Http
+
+<PageTitle>@(ev?.Title ?? "Dogodek") | KvizHub</PageTitle>
+
+<a href="events" class="small text-muted text-decoration-none">← Nazaj na iskanje</a>
+
+@if (loadError is not null)
+{
+    <div class="alert alert-secondary mt-3">@loadError</div>
+}
+else if (ev is null)
+{
+    <p class="mt-3">Nalaganje …</p>
+}
+else
+{
+    <h1 class="mt-2">@ev.Title</h1>
+    <div>@ev.Venue.Name</div>
+    <div>@ev.Venue.Street, @ev.Venue.PostalCode @ev.Venue.City</div>
+    <div>@FormatStart(ev.StartsAt)</div>
+    <div>Organizator: @ev.OrganizerName</div>
+
+    @if (ev.JokerEnabled)
+    {
+        <span class="badge rounded-pill border bg-light text-dark mt-3">Joker v enem sklopu</span>
+    }
+
+    <div class="fw-bold mt-4">Prosta mesta: @FreeSeats od @ev.Capacity</div>
+    <div class="progress mt-1" style="height: 0.75rem;">
+        <div class="progress-bar bg-dark" style="width: @(OccupiedPercent)%"></div>
+    </div>
+
+    <h2 class="h4 mt-4">Sklopi</h2>
+    <table class="table table-bordered table-sm">
+        <thead class="table-light">
+            <tr>
+                <th>#</th>
+                <th>Sklop</th>
+                <th>Tema</th>
+                <th class="text-end">Točke</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var section in ev.Sections)
+            {
+                <tr>
+                    <td>@section.Position</td>
+                    <td>@section.Name</td>
+                    <td>@section.Topic</td>
+                    <td class="text-end">@section.MaxPoints</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (isTeamLeader && ev.Status == EventStatus.Published)
+    {
+        <div class="border border-dark rounded p-3 mt-4">
+            <h2 class="h4">Rezervacija mize</h2>
+
+            @if (successMessage is not null)
+            {
+                <div class="alert alert-success">@successMessage</div>
+            }
+
+            @if (FreeSeats == 0)
+            {
+                <p class="text-muted mb-0">Na dogodku ni več prostih mest.</p>
+            }
+            else
+            {
+                @if (teams.Count > 0)
+                {
+                    <div class="form-check">
+                        <input id="existingTeam" type="radio" name="teamMode" class="form-check-input"
+                               checked="@useExistingTeam" @onchange="() => useExistingTeam = true" />
+                        <label for="existingTeam" class="form-check-label">Obstoječa ekipa</label>
+                    </div>
+                    <select class="form-select mb-2" disabled="@(!useExistingTeam)" @bind="selectedTeamId">
+                        @foreach (var team in teams)
+                        {
+                            <option value="@team.Id">@team.Name</option>
+                        }
+                    </select>
+                }
+
+                <div class="form-check">
+                    <input id="newTeam" type="radio" name="teamMode" class="form-check-input"
+                           checked="@(!useExistingTeam)" @onchange="() => useExistingTeam = false" />
+                    <label for="newTeam" class="form-check-label">Nova ekipa</label>
+                </div>
+                <input class="form-control mb-3" placeholder="Ime nove ekipe" disabled="@useExistingTeam" @bind="newTeamName" />
+
+                <label class="form-label small text-muted mb-1">Število članov</label>
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(teamSize <= 1)" @onclick="() => teamSize--">−</button>
+                    <span class="border rounded px-3 py-1 fw-bold">@teamSize</span>
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(teamSize >= MaxTeamSize)" @onclick="() => teamSize++">+</button>
+                    <span class="small text-muted">največ @MaxTeamSize</span>
+                </div>
+
+                @foreach (var error in errors)
+                {
+                    <div class="text-danger small mb-2">@error</div>
+                }
+
+                <button class="btn btn-dark w-100" disabled="@isSubmitting" @onclick="ReserveAsync">Rezerviraj mizo</button>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private static readonly string[] DayNames = ["nedelja", "ponedeljek", "torek", "sreda", "četrtek", "petek", "sobota"];
+
+    private EventDto? ev;
+    private string? loadError;
+    private bool isTeamLeader;
+
+    private List<TeamDto> teams = [];
+    private bool useExistingTeam;
+    private int? selectedTeamId;
+    private string? newTeamName;
+    private int teamSize = 1;
+    private List<string> errors = [];
+    private string? successMessage;
+    private bool isSubmitting;
+
+    private int FreeSeats => Math.Max(ev!.FreeSeats, 0);
+
+    // A team can have at most 6 members and cannot take more than the free seats
+    private int MaxTeamSize => Math.Max(1, Math.Min(6, FreeSeats));
+
+    private int OccupiedPercent => ev!.Capacity == 0 ? 0 : 100 * (ev.Capacity - FreeSeats) / ev.Capacity;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        isTeamLeader = user.IsInRole(nameof(UserRole.TeamLeader));
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            ev = await Http.GetFromJsonAsync<EventDto>($"api/events/{Id}");
+
+            if (isTeamLeader)
+            {
+                teams = await Http.GetFromJsonAsync<List<TeamDto>>("api/teams/mine") ?? [];
+                useExistingTeam = teams.Count > 0;
+                selectedTeamId ??= teams.FirstOrDefault()?.Id;
+            }
+
+            teamSize = Math.Clamp(teamSize, 1, MaxTeamSize);
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Dogodka ni mogoče najti.";
+        }
+    }
+
+    private async Task ReserveAsync()
+    {
+        isSubmitting = true;
+        errors = [];
+        successMessage = null;
+
+        var request = new CreateReservationRequest
+        {
+            TeamId = useExistingTeam ? selectedTeamId : null,
+            NewTeamName = useExistingTeam ? null : newTeamName,
+            TeamSize = teamSize
+        };
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"api/events/{Id}/reservations", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var reservation = (await response.Content.ReadFromJsonAsync<ReservationDto>())!;
+                successMessage = $"Miza je rezervirana za ekipo {reservation.TeamName}. Število članov: {reservation.TeamSize}.";
+                newTeamName = null;
+                await LoadAsync();
+            }
+            else if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ValidationErrors>();
+                errors = problem?.Errors?.SelectMany(e => e.Value).ToList() ?? ["Rezervacija ni uspela."];
+            }
+            else
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();
+                errors = [problem?.Detail ?? "Rezervacija ni uspela."];
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errors = ["Strežnik ni dosegljiv. Poskusite znova."];
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    // Start in local time with a Slovenian day name, e.g. "torek, 8. 12. 2026 ob 20:00"
+    private static string FormatStart(DateTime startsAt)
+    {
+        var local = startsAt.ToLocalTime();
+        return $"{DayNames[(int)local.DayOfWeek]}, {local:d. M. yyyy} ob {local:HH:mm}";
+    }
+
+    // Shapes of the error responses returned by the API
+    private sealed record ValidationErrors(Dictionary<string, string[]> Errors);
+    private sealed record ProblemResponse(string? Detail);
+}

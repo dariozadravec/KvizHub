@@ -106,7 +106,11 @@ namespace KvizHub.Api.Controllers
                 .OrderBy(s => s.Position)
                 .ToListAsync();
 
-            return ToDto(ev, sections);
+            var reservedSeats = await db.Reservations
+            .Where(r => r.EventId == id && r.Status == ReservationStatus.Confirmed)
+            .SumAsync(r => (int)r.TeamSize);
+
+            return ToDto(ev, sections, ev.Capacity - reservedSeats);
         }
 
         [HttpPost]
@@ -203,15 +207,17 @@ namespace KvizHub.Api.Controllers
             return ValidationProblem(ModelState);
         }
 
-        private static EventDto ToDto(QuizEvent ev, List<Section> sections) => new(
+        private static EventDto ToDto(QuizEvent ev, List<Section> sections, int freeSeats) => new(
             ev.Id,
             ev.Title,
             ev.StartsAt,
             ev.Status,
             ev.Capacity,
+            freeSeats,
             ev.JokerEnabled,
             new VenueDto(ev.Venue.Id, ev.Venue.Name, ev.Venue.Street, ev.Venue.PostalCode, ev.Venue.City, ev.Venue.DefaultCapacity),
             ev.Organizer.DisplayName,
-            sections.Select(s => new SectionDto(s.Id, s.Position, s.Name, s.Topic, s.MaxPoints)).ToList());
+            sections.Select(s => new SectionDto(s.Id, s.Position, s.Name, s.Topic, s.MaxPoints)).ToList()
+        );
     }
 }
