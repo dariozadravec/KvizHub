@@ -1,6 +1,7 @@
 ﻿using KvizHub.Api.Data;
 using KvizHub.Api.Identity;
 using KvizHub.Api.Services;
+using KvizHub.Shared.Enums;
 using KvizHub.Shared.Reservations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -36,10 +37,42 @@ namespace KvizHub.Api.Controllers
             return await ToDtoAsync(outcome.Reservation.Id);
         }
 
+        [HttpGet("reservations/mine")]
+        [Authorize(Policy = Policies.TeamLeader)]
+        public async Task<List<ReservationDto>> GetMine()
+        {
+            var userId = User.GetUserId();
+
+            return await db.Reservations
+                .Where(r => r.Leader.UserId == userId)
+                .OrderByDescending(r => r.Event.StartsAt)
+                .Select(r => new ReservationDto(r.Id, r.EventId, r.Event.Title, r.Event.StartsAt, r.Event.Status, r.Team.Name, r.TeamSize, r.Status))
+                .ToListAsync();
+        }
+
+        [HttpGet("events/{eventId:int}/reservations")]
+        [Authorize(Policy = Policies.Quizmaster)]
+        public async Task<ActionResult<List<EventReservationDto>>> GetForEvent(int eventId)
+        {
+            var ev = await db.QuizEvents.FindAsync(eventId);
+            if (ev is null)
+                return NotFound();
+            if (ev.OrganizerId != User.GetUserId())
+                return Forbid();
+
+            // Active reservations first, cancelled ones at the end
+            return await db.Reservations
+                .Where(r => r.EventId == eventId)
+                .OrderBy(r => r.Status == ReservationStatus.Cancelled)
+                .ThenBy(r => r.CreatedAt)
+                .Select(r => new EventReservationDto(r.Id, r.Team.Name, r.TeamSize, r.Leader.Name, r.Status))
+                .ToListAsync();
+        }
+
         private Task<ReservationDto> ToDtoAsync(int reservationId) =>
             db.Reservations
                 .Where(r => r.Id == reservationId)
-                .Select(r => new ReservationDto(r.Id, r.EventId, r.Event.Title, r.Event.StartsAt, r.Team.Name, r.TeamSize, r.Status))
+                .Select(r => new ReservationDto(r.Id, r.EventId, r.Event.Title, r.Event.StartsAt, r.Event.Status, r.Team.Name, r.TeamSize, r.Status))
                 .SingleAsync();
     }
 }

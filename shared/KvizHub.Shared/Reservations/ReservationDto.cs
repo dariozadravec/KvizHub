@@ -7,6 +7,7 @@ public record ReservationDto(
     int EventId,
     string EventTitle,
     DateTime EventStartsAt,
+    EventStatus EventStatus,
     string TeamName,
     int TeamSize,
     ReservationStatus Status
