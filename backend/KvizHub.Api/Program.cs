@@ -60,6 +60,7 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy(Policies.Admin, policy => policy.RequireRole(nameof(UserRole.Admin)));
 
 builder.Services.AddScoped<EventStatusService>();
+builder.Services.AddScoped<ReservationService>();
 
 var app = builder.Build();
 await AdminSeeder.SeedAsync(app.Services, app.Configuration, app.Logger);
