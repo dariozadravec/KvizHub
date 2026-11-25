@@ -93,5 +93,33 @@ namespace KvizHub.Api.Services
 
             return new ReservationOutcome(reservation, StatusCodes.Status200OK, null);
         }
+
+        public async Task<ReservationOutcome> CancelAsync(int reservationId, int userId)
+        {
+            var reservation = await db.Reservations
+                .Include(r => r.Event)
+                .Include(r => r.Leader)
+                .SingleOrDefaultAsync(r => r.Id == reservationId);
+
+            if (reservation is null)
+                return ReservationOutcome.Fail(StatusCodes.Status404NotFound, "Rezervacija ne obstaja.");
+
+            // Only the leader of the reservation can cancel it (US-07 K2)
+            if (reservation.Leader.UserId != userId)
+                return ReservationOutcome.Fail(StatusCodes.Status403Forbidden, "Rezervacijo lahko prekliče samo njen vodja.");
+
+            // Cancelling is possible only while registrations are open (US-07 K1)
+            if (reservation.Event.Status != EventStatus.Published)
+                return ReservationOutcome.Fail(StatusCodes.Status409Conflict, "Rezervacije za ta dogodek ni več mogoče preklicati.");
+
+            if (reservation.Status != ReservationStatus.Confirmed)
+                return ReservationOutcome.Fail(StatusCodes.Status409Conflict, "Rezervacija je že preklicana.");
+
+            reservation.Status = ReservationStatus.Cancelled;
+            reservation.CancelledAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            return new ReservationOutcome(reservation, StatusCodes.Status200OK, null);
+        }
     }
 }

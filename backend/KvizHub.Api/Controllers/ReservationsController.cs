@@ -69,6 +69,17 @@ namespace KvizHub.Api.Controllers
                 .ToListAsync();
         }
 
+        [HttpPost("reservations/{id:int}/cancel")]
+        [Authorize(Policy = Policies.TeamLeader)]
+        public async Task<ActionResult<ReservationDto>> Cancel(int id)
+        {
+            var outcome = await reservationService.CancelAsync(id, User.GetUserId());
+            if (outcome.Reservation is null)
+                return Problem(detail: outcome.Error, statusCode: outcome.StatusCode);
+
+            return await ToDtoAsync(id);
+        }
+
         private Task<ReservationDto> ToDtoAsync(int reservationId) =>
             db.Reservations
                 .Where(r => r.Id == reservationId)
