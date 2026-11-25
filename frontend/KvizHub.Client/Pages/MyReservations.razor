@@ -1,5 +1,6 @@
 ﻿@page "/my-reservations"
 @inject HttpClient Http
+@inject IJSRuntime JS
 
 <PageTitle>Moje rezervacije | KvizHub</PageTitle>
 
@@ -22,6 +23,7 @@ else
     @foreach (var reservation in reservations)
     {
         var isCancelled = reservation.Status == ReservationStatus.Cancelled;
+        var canCancel = reservation.Status == ReservationStatus.Confirmed && reservation.EventStatus == EventStatus.Published;
 
         <div class="border rounded p-3 mb-3 @(isCancelled ? "bg-light" : "")">
             <div class="d-flex justify-content-between align-items-start">
@@ -34,6 +36,19 @@ else
                     @ReservationStatusText.Label(reservation.Status)
                 </span>
             </div>
+
+            @if (canCancel)
+            {
+                <button class="btn btn-outline-danger btn-sm mt-3" disabled="@(busyReservationId == reservation.Id)"
+                        @onclick="() => CancelAsync(reservation)">
+                    Prekliči rezervacijo
+                </button>
+            }
+
+            @if (errors.TryGetValue(reservation.Id, out var error))
+            {
+                <div class="text-danger small mt-2">@error</div>
+            }
         </div>
     }
 }
@@ -41,8 +56,12 @@ else
 @code {
     private List<ReservationDto>? reservations;
     private string? loadError;
+    private int? busyReservationId;
+    private readonly Dictionary<int, string> errors = [];
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
     {
         try
         {
@@ -53,4 +72,42 @@ else
             loadError = "Seznama rezervacij ni mogoče naložiti.";
         }
     }
+
+    private async Task CancelAsync(ReservationDto reservation)
+    {
+        // Asks for confirmation before cancelling (US-07 K3)
+        var confirmed = await JS.InvokeAsync<bool>("confirm",
+            $"Ali res želite preklicati rezervacijo ekipe {reservation.TeamName} za dogodek „{reservation.EventTitle}“?");
+        if (!confirmed)
+            return;
+
+        busyReservationId = reservation.Id;
+        errors.Remove(reservation.Id);
+
+        try
+        {
+            var response = await Http.PostAsync($"api/reservations/{reservation.Id}/cancel", null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadAsync();
+            }
+            else
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();
+                errors[reservation.Id] = problem?.Detail ?? "Preklic ni uspel.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errors[reservation.Id] = "Strežnik ni dosegljiv. Poskusite znova.";
+        }
+        finally
+        {
+            busyReservationId = null;
+        }
+    }
+
+    // Shape of the problem details returned by the API
+    private sealed record ProblemResponse(string? Detail);
 }
